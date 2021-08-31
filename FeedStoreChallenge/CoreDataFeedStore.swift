@@ -72,7 +72,15 @@ public final class CoreDataFeedStore: FeedStore {
 	}
 
 	public func deleteCachedFeed(completion: @escaping DeletionCompletion) {
-		completion(nil)
+		let context = self.context
+		context.perform {
+			do {
+				try ManagedCache.fetch(from: context).map(context.delete).map(context.save)
+				completion(nil)
+			} catch {
+				completion(error)
+			}
+		}
 	}
 }
 
@@ -82,7 +90,7 @@ private class ManagedCache: NSManagedObject {
 	@NSManaged var feed: NSOrderedSet
 
 	static func newUniqueInstance(in context: NSManagedObjectContext) throws -> ManagedCache {
-		try fetch(from: context).map(context.delete(_:))
+		try fetch(from: context).map(context.delete)
 		return ManagedCache(context: context)
 	}
 
