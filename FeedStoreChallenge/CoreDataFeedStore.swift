@@ -34,9 +34,7 @@ public final class CoreDataFeedStore: FeedStore {
 			do {
 				if let cache = try ManagedCache.fetch(from: context) {
 					completion(.found(
-						feed: cache.feed
-							.compactMap { $0 as? ManagedFeedImage }
-							.map { LocalFeedImage(id: $0.id, description: $0.imageDescription, location: $0.location, url: $0.url) },
+						feed: cache.localFeed,
 						timestamp: cache.timestamp)
 					)
 				} else {
@@ -54,14 +52,7 @@ public final class CoreDataFeedStore: FeedStore {
 			do {
 				let managedCache = try ManagedCache.newUniqueInstance(in: context)
 				managedCache.timestamp = timestamp
-				managedCache.feed = NSOrderedSet(array: feed.map { resultItem in
-					let managedFeedImage = ManagedFeedImage(context: context)
-					managedFeedImage.id = resultItem.id
-					managedFeedImage.imageDescription = resultItem.description
-					managedFeedImage.location = resultItem.location
-					managedFeedImage.url = resultItem.url
-					return managedFeedImage
-				})
+				managedCache.feed = ManagedFeedImage.images(from: feed, in: context)
 				try context.save()
 				completion(nil)
 			} catch {
@@ -89,6 +80,9 @@ public final class CoreDataFeedStore: FeedStore {
 private class ManagedCache: NSManagedObject {
 	@NSManaged var timestamp: Date
 	@NSManaged var feed: NSOrderedSet
+	var localFeed: [LocalFeedImage] {
+		feed.compactMap { ($0 as? ManagedFeedImage)?.local }
+	}
 
 	static func newUniqueInstance(in context: NSManagedObjectContext) throws -> ManagedCache {
 		try fetch(from: context).map(context.delete)
@@ -109,4 +103,19 @@ private class ManagedFeedImage: NSManagedObject {
 	@NSManaged var location: String?
 	@NSManaged var url: URL
 	@NSManaged var cache: ManagedCache
+
+	var local: LocalFeedImage {
+		LocalFeedImage(id: id, description: imageDescription, location: location, url: url)
+	}
+
+	static func images(from localFeed: [LocalFeedImage], in context: NSManagedObjectContext) -> NSOrderedSet {
+		NSOrderedSet(array: localFeed.map { local in
+			let managed = ManagedFeedImage(context: context)
+			managed.id = local.id
+			managed.imageDescription = local.description
+			managed.location = local.location
+			managed.url = local.url
+			return managed
+		})
+	}
 }
